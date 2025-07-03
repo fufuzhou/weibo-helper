@@ -11,6 +11,7 @@ import xyz.cssxsh.weibo.data.*
 import xyz.cssxsh.weibo.api.*
 import java.net.*
 import java.time.*
+import java.util.LinkedHashSet
 import kotlin.coroutines.*
 
 public abstract class WeiboSubscriber<K : Comparable<K>>(public val type: String) : CoroutineScope {
@@ -45,6 +46,8 @@ public abstract class WeiboSubscriber<K : Comparable<K>>(public val type: String
     protected open val filter: WeiboFilter get() = WeiboHelperSettings
 
     private val forward get() = UseForwardMessage
+
+    private val cacheLimit: Int = 8196
 
     protected abstract val tasks: MutableMap<K, WeiboTaskInfo>
 
@@ -115,11 +118,21 @@ public abstract class WeiboSubscriber<K : Comparable<K>>(public val type: String
         true
     }
 
+    private fun MutableSet<Long>.addWithLimit(value: Long) {
+        if (size >= cacheLimit) {
+            val it = iterator()
+            if (it.hasNext()) {
+                remove(it.next())
+            }
+        }
+        add(value)
+    }
+
     private fun listen(id: K): Job = launch {
         logger.info { "添加对$type(${tasks.getValue(id).name}#${id})的监听任务" }
         val history by WeiboHistoryDelegate(id, this@WeiboSubscriber)
-        val cache: MutableSet<Long> = HashSet(history.keys)
-        for ((_, blog) in history) cache.add(blog.retweeted?.id ?: continue)
+        val cache: MutableSet<Long> = LinkedHashSet(history.keys)
+        for ((_, blog) in history) cache.addWithLimit(blog.retweeted?.id ?: continue)
         logger.debug { "$type(${tasks.getValue(id).name}#${id})的 cache: $cache" }
         var init = true
         logger.debug { "$type(${tasks.getValue(id).name}#${id})的 target: ${infos(id)}" }
@@ -131,8 +144,8 @@ public abstract class WeiboSubscriber<K : Comparable<K>>(public val type: String
                     val list = load(id)
                     for (blog in list) {
                         history[blog.id] = blog
-                        cache.add(blog.id)
-                        cache.add(blog.retweeted?.id ?: continue)
+                        cache.addWithLimit(blog.id)
+                        cache.addWithLimit(blog.retweeted?.id ?: continue)
                     }
                     init = false
                     logger.debug { "$type(${tasks.getValue(id).name}#${id})的 init: $cache" }
@@ -170,8 +183,8 @@ public abstract class WeiboSubscriber<K : Comparable<K>>(public val type: String
                 for (blog in list) {
                     history[blog.id] = blog
                     last = maxOf(blog.created, last)
-                    cache.add(blog.id)
-                    cache.add(blog.retweeted?.id ?: continue)
+                    cache.addWithLimit(blog.id)
+                    cache.addWithLimit(blog.retweeted?.id ?: continue)
                 }
 
                 tasks[id] = task.copy(last = last)

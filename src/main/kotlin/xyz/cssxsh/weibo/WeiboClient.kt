@@ -93,6 +93,7 @@ public open class WeiboClient(
                 cause = throwable
                 count++
                 if (count > max || ignore(throwable).not()) throw throwable
+                delay(1000)
             }
         }
         throw CancellationException(null, cause)

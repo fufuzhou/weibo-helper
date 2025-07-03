@@ -39,6 +39,13 @@ internal object WeiboListener : CoroutineScope {
     private fun cache(subject: Contact, match: MatchResult): Boolean {
         val history = cache.getOrPut(subject.id) { HashMap() }
         val current = System.currentTimeMillis()
+        val iterator = history.iterator()
+        while (iterator.hasNext()) {
+            val entry = iterator.next()
+            if (current - entry.value > interval) {
+                iterator.remove()
+            }
+        }
         return current != history.merge(match.value, current) { old, new -> if (new - old > interval) new else old }
     }
 
