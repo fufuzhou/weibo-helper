@@ -12,6 +12,7 @@ import net.mamoe.mirai.utils.*
 import xyz.cssxsh.mirai.weibo.data.*
 import xyz.cssxsh.weibo.api.*
 import kotlin.coroutines.*
+import java.util.LinkedHashMap
 
 internal object WeiboListener : CoroutineScope {
 
@@ -36,10 +37,34 @@ internal object WeiboListener : CoroutineScope {
 
     private val cache: MutableMap<Long, MutableMap<String, Long>> = HashMap()
 
+    private val cacheLimit = 1024
+
     private fun cache(subject: Contact, match: MatchResult): Boolean {
-        val history = cache.getOrPut(subject.id) { HashMap() }
+        val history = cache.getOrPut(subject.id) { LinkedHashMap() }
         val current = System.currentTimeMillis()
-        return current != history.merge(match.value, current) { old, new -> if (new - old > interval) new else old }
+
+        val iter = history.entries.iterator()
+        while (iter.hasNext()) {
+            val entry = iter.next()
+            if (current - entry.value > interval) {
+                iter.remove()
+            }
+        }
+
+        if (history.size > cacheLimit) {
+            val dropIter = history.entries.iterator()
+            repeat(history.size - cacheLimit) {
+                if (dropIter.hasNext()) {
+                    dropIter.next(); dropIter.remove()
+                }
+            }
+        }
+
+        val previous = history.merge(match.value, current) { old, new -> if (new - old > interval) new else old }
+
+        if (history.isEmpty()) cache.remove(subject.id)
+
+        return current != previous
     }
 
     fun start() {

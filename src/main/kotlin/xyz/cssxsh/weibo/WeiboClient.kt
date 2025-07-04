@@ -86,6 +86,7 @@ public open class WeiboClient(
     public suspend fun <T> useHttpClient(block: suspend (HttpClient) -> T): T = supervisorScope {
         var count = 0
         var cause: Throwable? = null
+        var backoff = 1000L
         while (isActive) {
             try {
                 return@supervisorScope block(client)
@@ -93,6 +94,8 @@ public open class WeiboClient(
                 cause = throwable
                 count++
                 if (count > max || ignore(throwable).not()) throw throwable
+                delay(backoff)
+                backoff = (backoff * 2).coerceAtMost(60_000L)
             }
         }
         throw CancellationException(null, cause)

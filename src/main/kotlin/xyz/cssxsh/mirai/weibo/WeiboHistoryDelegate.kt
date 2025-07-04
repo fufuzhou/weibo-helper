@@ -46,6 +46,9 @@ public class WeiboHistoryDelegate<K : Comparable<K>>(id: K, subscriber: WeiboSub
                 cache
             }
             file.writeText(WeiboClient.Json.encodeToString(write))
+            if (write !== cache) {
+                cache.keys.retainAll(write.keys)
+            }
         } catch (cause: Exception) {
             logger.warning({ "WeiboHistory ${file.absolutePath} 保存失败" }, cause)
         }

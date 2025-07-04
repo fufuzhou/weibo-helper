@@ -148,20 +148,28 @@ internal val LoginContact by lazy {
     throw NoSuchElementException("无法联系 $id")
 }
 
+private var loginNotifier: Job? = null
+
 internal fun sendLoginMessage(message: String) {
-    try {
+    if (loginNotifier?.isActive == true) return
+    val scope = try {
         WeiboHelperPlugin
     } catch (_: Throwable) {
         CoroutineScope(Dispatchers.IO) + SupervisorJob()
-    }.launch {
-        while (isActive) {
-            try {
-                LoginContact.sendMessage(message)
-                break
-            } catch (cause: Exception) {
-                logger.warning({ "向 ${LoginContact.render()} 发送消息失败" }, cause)
+    }
+    loginNotifier = scope.launch {
+        try {
+            while (isActive) {
+                try {
+                    LoginContact.sendMessage(message)
+                    break
+                } catch (cause: Exception) {
+                    logger.warning({ "向 ${LoginContact.render()} 发送消息失败" }, cause)
+                }
+                delay(60_000L)
             }
-            delay(60_000L)
+        } finally {
+            loginNotifier = null
         }
     }
 }
